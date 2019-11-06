@@ -16,6 +16,10 @@ defmodule Lobbygame.MatchMaking do
     GenServer.call(__MODULE__, {:remove_user_from_lobby, @default_lobby_id, user_id})
   end
 
+  def reset() do
+    GenServer.cast(__MODULE__, {:reset_lobby})
+  end
+
   # server
   @impl true
   def init(server) do
@@ -31,14 +35,17 @@ defmodule Lobbygame.MatchMaking do
         server
       end
 
-    server =
-      if length(server[lobby_id]) < 1 do
-        %{lobby_id => [user_id]}
-      else
-        Map.put(server, lobby_id, server[lobby_id] ++ [user_id])
-      end
+    if length(server[lobby_id]) < 4 do
+      server =
+        if length(server[lobby_id]) < 1 do
+          %{lobby_id => [user_id]}
+        else
+          Map.put(server, lobby_id, server[lobby_id] ++ [user_id])
+        end
 
-    Lobby.add_user(user_id)
+      Lobby.add_user(user_id)
+    end
+
     {:reply, server, server}
   end
 
@@ -47,6 +54,11 @@ defmodule Lobbygame.MatchMaking do
     server = Map.put(server, lobby_id, List.delete(server[lobby_id], user_id))
     Lobby.remove_user(user_id)
     {:reply, server, server}
+  end
+
+  @impl true
+  def handle_cast({:reset_lobby}, server) do
+    {:noreply, server}
   end
 
   defp create_lobby(lobby_id, server) do

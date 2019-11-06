@@ -36,7 +36,6 @@ defmodule Lobbygame.Lobby do
 
   def handle_call({:add_user, user_id}, _from, state) do
     if length(state.users) >= 4 do
-      schedule_new()
       {:reply, state, state}
     else
       users = state.users
@@ -46,6 +45,10 @@ defmodule Lobbygame.Lobby do
       LobbygameWeb.Endpoint.broadcast!("lobby:#{state.lobby_id}", "new_state", %{
         users: state.users
       })
+
+      if length(users) == 4 do
+        schedule_new()
+      end
 
       {:reply, state, state}
     end
@@ -89,14 +92,24 @@ defmodule Lobbygame.Lobby do
 
     winning_players = state.users -- losing_players
 
+    IO.inspect(binding)
+
     cond do
       losing_players == [] ->
+        LobbygameWeb.Endpoint.broadcast!("lobby:#{state.lobby_id}", "new_state", %{
+          users: state.users
+        })
         {:noreply, state}
 
       length(winning_players) == 2 ->
         IO.puts("DRAW!!!")
         Enum.each(winning_players, fn player -> advance_campaign(player.user_id) end)
-        {:noreply, state}
+
+        LobbygameWeb.Endpoint.broadcast!("lobby:#{state.lobby_id}", "new_state", %{
+          users: state.users
+        })
+
+        {:noreply, %{lobby_id: @default_lobby_id, users: []}}
 
       true ->
         updated_losing_players =
@@ -108,12 +121,22 @@ defmodule Lobbygame.Lobby do
         users = users ++ updated_losing_players
         state = Map.put(state, :users, users)
 
-        if length(winning_players) == 1 do
-          hd(winning_players).user_id
-          |> advance_campaign
-        end
+        LobbygameWeb.Endpoint.broadcast!("lobby:#{state.lobby_id}", "new_state", %{
+            users: state.users
+          })
 
-        {:noreply, state}
+        if length(winning_players) == 1 do
+          winner = hd(winning_players).user_id
+
+          LobbygameWeb.Endpoint.broadcast!("lobby:#{state.lobby_id}", "new_winner", %{
+            winner: winner
+          })
+          |> advance_campaign
+
+          {:noreply, %{lobby_id: @default_lobby_id, users: []}}
+        else
+          {:noreply, state}
+        end
     end
   end
 
